@@ -1,59 +1,63 @@
 package io.scalac.rabbit
 
 import akka.actor.ActorSystem
-import com.rabbitmq.client._
+import akka.pattern.ask
+import akka.stream.scaladsl.Flow
+import akka.stream.{FlowMaterializer, MaterializerSettings}
+import akka.util.Timeout
+import com.rabbitmq.client.Connection
 import io.scalac.rabbit.flow._
-import RabbitConsumerFlow._
+import io.scalac.rabbit.flow.RabbitConnectionActor.Connect
 import java.net.InetSocketAddress
-import scala.util._
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
-  
-object ConsumerApp extends App {
-  
-  val QUEUE = "reactiveStreamTestQueue"
-  val EXCHANGE = "reactiveStreamTestExchange"
+class ConsumerApp2 extends App {
+
+  val INBOUND_EXCHANGE = "rabitAkkaStreamInboundExchange"
+  val INBOUND_QUEUE = "rabbitAkkaStreamInboundQueue"
     
-  val factory = new ConnectionFactory
-  implicit val connection = factory.newConnection()
+  val OUTBOUND_EXCHANGE = "rabitAkkaStreamOutboundExchange"
+  val OUTBOUND_QUEUE = "rabbitAkkaStreamOutboundQueue"
+    
+  implicit val timeout = Timeout(2 seconds)
   
-  implicit val system = ActorSystem("RabbitConsumer")
+  implicit val actorSystem = ActorSystem("rabbit-akka-stream")
+  
+  implicit val executor = actorSystem.dispatcher
+  
   val serverAddress = new InetSocketAddress("127.0.0.1", 5672)
-    
-  //initialize exchange, queues and bindings
-  configureRabbit(connection)
+
+  val connectionActor = actorSystem.actorOf(RabbitConnectionActor.props(serverAddress))
   
-  val flow1 = RabbitConsumerPullFlow(
-    QUEUE, 
-    _.foreach(msg => {
-      msg.ack()
-      println("flow1: " + msg.body)
-
-      //slow down a little
-      Thread.sleep(5000)
-    })
-  )
-
-  val flow2 = RabbitConsumerPushFlow(
-    QUEUE, 
-    _.foreach(msg => {
-      msg.ack()
-      println("flow2: " + msg.body)
-
-      //slow down a little
+  val censorshipDomainProcessing = (in: Flow[RabbitMessage]) => 
+    in.map(_.body).filter(!_.contains("terror")).map( msg => {
       Thread.sleep(2000)
-    })
-  )
+      println(msg)
+      msg}).map(_ + "\nmessage processed") 
   
-  //run the flow
-  flow1.startProcessing()
+  (connectionActor ? Connect).mapTo[Connection] map { conn =>
+    
+    implicit val connection = conn
+    
+    val consumerFlow = RabbitConsumer(INBOUND_QUEUE).flow
+    
+    val publisherFlow = RabbitPublisher(OUTBOUND_EXCHANGE).flow
+    
+    publisherFlow(censorshipDomainProcessing(consumerFlow)).consume(FlowMaterializer(MaterializerSettings()))
+  }
 
-  flow2.startProcessing()
-
+  //TODO use this
   def configureRabbit(conn: Connection): Unit = {
     val channel = conn.createChannel()
-    channel.exchangeDeclare(EXCHANGE, "direct")
-    channel.queueDeclare(QUEUE, true, false, false, null)
-    channel.queueBind(QUEUE, EXCHANGE, "")
+    channel.exchangeDeclare(INBOUND_EXCHANGE, "direct")
+    channel.queueDeclare(INBOUND_QUEUE, true, false, false, null)
+    channel.queueBind(INBOUND_QUEUE, INBOUND_EXCHANGE, "")
+
+    channel.exchangeDeclare(OUTBOUND_EXCHANGE, "direct")
+    channel.queueDeclare(OUTBOUND_QUEUE, true, false, false, null)
+    channel.queueBind(OUTBOUND_QUEUE, OUTBOUND_EXCHANGE, "")
+
     channel.close()
   }
 }
