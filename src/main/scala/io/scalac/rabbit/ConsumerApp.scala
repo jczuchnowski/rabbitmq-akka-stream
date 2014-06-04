@@ -1,41 +1,59 @@
 package io.scalac.rabbit
 
 import akka.actor.ActorSystem
+import com.rabbitmq.client._
+import io.scalac.rabbit.flow._
+import RabbitConsumerFlow._
 import java.net.InetSocketAddress
-import com.rabbitmq.client.Connection
-import com.rabbitmq.client.ConnectionFactory
-import akka.stream.FlowMaterializer
-import akka.stream.MaterializerSettings
-import scala.util.Success
-import scala.util.Failure
+import scala.util._
 
+  
 object ConsumerApp extends App {
   
+  val QUEUE = "reactiveStreamTestQueue"
+  val EXCHANGE = "reactiveStreamTestExchange"
+    
   val factory = new ConnectionFactory
-  val connection = factory.newConnection()
+  implicit val connection = factory.newConnection()
   
   implicit val system = ActorSystem("RabbitConsumer")
   val serverAddress = new InetSocketAddress("127.0.0.1", 5672)
     
-  val client = new RabbitClient
+  //initialize exchange, queues and bindings
+  configureRabbit(connection)
   
-  val channel = connection.createChannel()
-  val materializer = FlowMaterializer(MaterializerSettings())
-  val flow = client.consume("reactiveStreamTestExchange", "reactiveStreamTestQueue", channel)
+  val flow1 = RabbitConsumerPullFlow(
+    QUEUE, 
+    _.foreach(msg => {
+      msg.ack()
+      println("flow1: " + msg.body)
+
+      //slow down a little
+      Thread.sleep(5000)
+    })
+  )
+
+  val flow2 = RabbitConsumerPushFlow(
+    QUEUE, 
+    _.foreach(msg => {
+      msg.ack()
+      println("flow2: " + msg.body)
+
+      //slow down a little
+      Thread.sleep(2000)
+    })
+  )
   
-  flow.foreach(msg => {
-    channel.basicAck(msg.getEnvelope().getDeliveryTag(), false)
-    println("from flow: " + new String(msg.getBody()))
-    
-    //simulate slow operation
-    Thread.sleep(5000)
-  }).onComplete(materializer) {
-    case Success(_) => 
-      println("Success")
-      channel.close()
-    case Failure(e) =>
-      println("Failure: " + e.getMessage)
-      channel.close()
+  //run the flow
+  flow1.startProcessing()
+
+  flow2.startProcessing()
+
+  def configureRabbit(conn: Connection): Unit = {
+    val channel = conn.createChannel()
+    channel.exchangeDeclare(EXCHANGE, "direct")
+    channel.queueDeclare(QUEUE, true, false, false, null)
+    channel.queueBind(QUEUE, EXCHANGE, "")
+    channel.close()
   }
-  
 }
