@@ -1,18 +1,21 @@
 package io.scalac.rabbit.flow
 
 import akka.stream.scaladsl.Flow
-import com.rabbitmq.client.Connection
 import com.rabbitmq.client.Channel
+import com.rabbitmq.client.Connection
 
-case class RabbitPublisher(exchange: String)(implicit connection: Connection) {
+/**
+ * Wraps the action of publishing to a RabbitMQ channel and exposes it as a Flow processing.
+ * 
+ * This class will first initiate a new channel and declare a simple binding between an exchange and a queue.
+ */
+class RabbitPublisher(binding: RabbitBinding)(implicit connection: Connection) extends ChannelInitializer {
 
-  lazy val channel = initChannel()
+  val channel = initChannel(binding)
   
-  lazy val flow: Flow[String] => Flow[Unit] = in => in.foreach(msg => channel.basicPublish(exchange, "", null, msg.getBytes()))
+  val flow: Flow[String] => Flow[Unit] = 
+    input => input foreach { 
+      msg => channel.basicPublish(binding.exchange, "", null, msg.getBytes()) 
+    }
   
-  private def initChannel(): Channel =  {
-    val ch = connection.createChannel()
-    ch.exchangeDeclare(exchange, "direct")
-    ch
-  }
 }

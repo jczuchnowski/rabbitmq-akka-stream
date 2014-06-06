@@ -9,55 +9,65 @@ import com.rabbitmq.client.Connection
 import io.scalac.rabbit.flow._
 import io.scalac.rabbit.flow.RabbitConnectionActor.Connect
 import java.net.InetSocketAddress
+import QueueRegistry._
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class ConsumerApp2 extends App {
+object QueueRegistry {
 
   val INBOUND_EXCHANGE = "rabitAkkaStreamInboundExchange"
   val INBOUND_QUEUE = "rabbitAkkaStreamInboundQueue"
     
   val OUTBOUND_EXCHANGE = "rabitAkkaStreamOutboundExchange"
   val OUTBOUND_QUEUE = "rabbitAkkaStreamOutboundQueue"
-    
+  
+}
+
+/**
+ * This is the message processing specific for a domain. Here we are only applying some 
+ * simple filtering, logging and mapping, but the idea is that this part as the meat of your application.
+ * 
+ * Depending on your domain you could for example call some external services or actors here.
+ */
+object MyDomainProcessing extends Function1[Flow[RabbitMessage], Flow[String]] {
+  
+  def apply(input: Flow[RabbitMessage]) = input
+    .map(_.body)                     // extract message body
+    .filter(!_.contains("terror"))   // filter out dangerous messages 
+    .map( msg => {
+      Thread.sleep(2000)             // do something time consuming - like go to sleep
+      println(msg)                   // then echo the message text
+      msg })
+    .map(_ + "\nmessage processed")  // add the censorship mark
+}
+
+object ConsumerApp extends App {
+
   implicit val timeout = Timeout(2 seconds)
   
   implicit val actorSystem = ActorSystem("rabbit-akka-stream")
   
   implicit val executor = actorSystem.dispatcher
   
-  val serverAddress = new InetSocketAddress("127.0.0.1", 5672)
+  val materializer = FlowMaterializer(MaterializerSettings())
+  
+  val connectionActor = actorSystem.actorOf(
+    RabbitConnectionActor.props(new InetSocketAddress("127.0.0.1", 5672))
+  )
+  
+  /*
+   * Ask for a connection and start processing.
+   */
+  (connectionActor ? Connect).mapTo[Connection] map { implicit conn =>
+    
+    val consumerFlow = new RabbitConsumer(RabbitBinding(INBOUND_EXCHANGE, INBOUND_QUEUE)).flow
 
-  val connectionActor = actorSystem.actorOf(RabbitConnectionActor.props(serverAddress))
-  
-  val censorshipDomainProcessing = (in: Flow[RabbitMessage]) => 
-    in.map(_.body).filter(!_.contains("terror")).map( msg => {
-      Thread.sleep(2000)
-      println(msg)
-      msg}).map(_ + "\nmessage processed") 
-  
-  (connectionActor ? Connect).mapTo[Connection] map { conn =>
+    val publisherFlow = new RabbitPublisher(RabbitBinding(OUTBOUND_EXCHANGE, OUTBOUND_QUEUE)).flow
     
-    implicit val connection = conn
-    
-    val consumerFlow = RabbitConsumer(INBOUND_QUEUE).flow
-    
-    val publisherFlow = RabbitPublisher(OUTBOUND_EXCHANGE).flow
-    
-    publisherFlow(censorshipDomainProcessing(consumerFlow)).consume(FlowMaterializer(MaterializerSettings()))
+    /*
+     * the actual flow initialization
+     */
+    (MyDomainProcessing andThen publisherFlow)(consumerFlow).consume(materializer)
   }
 
-  //TODO use this
-  def configureRabbit(conn: Connection): Unit = {
-    val channel = conn.createChannel()
-    channel.exchangeDeclare(INBOUND_EXCHANGE, "direct")
-    channel.queueDeclare(INBOUND_QUEUE, true, false, false, null)
-    channel.queueBind(INBOUND_QUEUE, INBOUND_EXCHANGE, "")
-
-    channel.exchangeDeclare(OUTBOUND_EXCHANGE, "direct")
-    channel.queueDeclare(OUTBOUND_QUEUE, true, false, false, null)
-    channel.queueBind(OUTBOUND_QUEUE, OUTBOUND_EXCHANGE, "")
-
-    channel.close()
-  }
 }
