@@ -1,4 +1,4 @@
 rabbitmq-akka-streams
 =====================
 
-Experimenting with Akka Streams.
+Experimenting with Akka Stream and RabbitMQ client.
