@@ -28,7 +28,6 @@ class RabbitConsumer(binding: RabbitBinding)(implicit connection: Connection) ex
       processingQueue += new RabbitMessage(envelope.getDeliveryTag(), new String(body, "UTF-8"), channel)
     }
   }
-  
 
   val flow: Flow[RabbitMessage] = {
     register(channel, consumer)
@@ -37,8 +36,7 @@ class RabbitConsumer(binding: RabbitBinding)(implicit connection: Connection) ex
     
     flow filter { msgTry => msgTry.isSuccess } map { msgTry => msgTry.get }
   }
-          
- 
+  
   private def register(ch: Channel, consumer: Consumer): Unit =  {
     ch.basicQos(2)
     ch.basicConsume(binding.queue, autoAck, consumer)

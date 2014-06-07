@@ -1,0 +1,75 @@
+<body>
+    <div>
+        <h2>Overview</h2>
+        <p>
+        This project aims to show that reactive Akka Streams can provide a very pleasant way of working with RabbitMQ.
+        </p>
+        <p>
+        We are assuming some basic knowledge of RabbitMQ. Otherwise you wouldn't probably be here. 
+        But if this is one of these rare cases then please look closer at this cool piece of technology here <a href="http://www.rabbitmq.com/">http://www.rabbitmq.com/</a> . 
+        </p>
+        <p>
+        You should have a RabbitMQ server installed locally with a management plug-in.
+        </p>
+        <p>
+        The scenario for this project is as follows:
+        </p>
+        <pre><code>Queue --> Akka Stream --> Exchange</code></pre>
+        <p>
+        So what we're going to do, is to consume messages from a Rabbit queue, process it through 
+        Akka Stream and finally publish it back to another Rabbit exchange.
+        </p>
+    </div>
+    <div>
+        <h2>Explore</h2>
+        <p>
+        After running the app, go RabbitMQ management console at <a href="http://localhost:15672/">http://localhost:15672/</a> , 
+        find an exchange named <strong>rabitAkkaStreamInboundExchange</strong> and start publishing messages.
+        </p>
+        <p>
+        You should observe two effects:
+        </p>
+        <ol>
+        <li>Your message will be printed to a console,
+        <li>A queue named <strong>rabbitAkkaStreamOutboundQueue</strong> will contain a slightly modified version of your message.
+        </ol>
+        <p>
+        You will notice that messages containing the word 'terror' will not go to the outbound queue. This is a censorship filter 
+        implemented on purpose. Feel free to modify the "forbidden words" list, but we insist you do not remove the filter entirely. 
+        Otherwise unexpected things can happen - censorship is very important.
+        </p>
+    </div>
+    <div>
+        <h2>Consuming, processing, publishing</h2>
+        <p>
+        Below you will find the main steps for this whole process.
+        </p>
+        <h3>Consuming messages</h3>
+        <p>
+        <code>RabbitConsumer</code> class is responsible for initializing a channel to the queue and registering 
+        a consumer for that queue. It exposes <code>Flow[RabbitMessage]</code> 
+        object that gives you the stream if incoming rabbit messages you can work with.
+        </p>
+        <h3>Processing messages</h3>
+        <p>
+        To split the work into logical parts we are declaring the processing as a function of <code>Flow[RabbitMessage] =&gt; Flow[String]</code>.
+        </p>
+        <h3>Publishing back to RabbitMQ</h3>
+        <p>
+        <code>RabbitPublisher</code> is, again, responsible for initializing an outgoing channel. 
+        The <code>Flow[String] =&gt; Flow[Unit]</code> function that it creates, contains logic for publishing message back to RabbitMQ exchange.
+        </p>
+        <h3>Putting it all together</h3>
+        <p>
+        After receiving a connection from <code>RabbitConnectionActor</code> we combine these functions and call <code>consume()</code> on the final flow.
+        </p>
+        <pre><code>(MyDomainProcessing andThen publisherFlow)(consumerFlow).consume(materializer)</code></pre>
+    </div>
+    <div>
+        <h2>This is it</h2>
+        <p>
+        You just saw a clean functional way of working with RabbitMQ. There are of course many problems that have to be solved here. 
+        This project is just a simple wrapper on the official RabbitMQ client, not a complete solution, but hopefully this is the way we'll be doing things in the future.
+        </p>
+    </div>
+</body>
