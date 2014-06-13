@@ -34,7 +34,7 @@ class RabbitConsumer(binding: RabbitBinding)(implicit connection: Connection) ex
     
     val flow = Flow(() => Try(processingQueue.dequeue))
     
-    flow filter { msgTry => msgTry.isSuccess } map { msgTry => msgTry.get }
+    flow filter { _.isSuccess } map { _.get }
   }
   
   private def register(ch: Channel, consumer: Consumer): Unit =  {

@@ -13,6 +13,7 @@ import QueueRegistry._
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import akka.stream.scaladsl.Duct
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 object QueueRegistry {
 
@@ -30,16 +31,25 @@ object QueueRegistry {
  * 
  * Depending on your domain you could for example call some external services or actors here.
  */
-object MyDomainProcessing {
+object MyDomainProcessing extends LazyLogging {
   
   def apply() = Duct.apply[RabbitMessage]
-    .map(_.body)                     // extract message body
-    .filter(!_.contains("terror"))   // filter out dangerous messages 
+  
+    // extract message body
+    .map(_.body)
+    
+    // filter out dangerous messages
+    .filter(!_.contains("terror"))
+    
+    // do something time consuming - like go to sleep
+    // then log the message text
     .map( msg => {
-      Thread.sleep(2000)             // do something time consuming - like go to sleep
-      println(msg)                   // then echo the message text
+      Thread.sleep(2000)
+      logger.info(msg)
       msg })
-    .map(_ + "\nmessage processed")  // add the censorship mark
+      
+    // add the censorship mark
+    .map(_ + "\nmessage processed")
 }
 
 object ConsumerApp extends App {

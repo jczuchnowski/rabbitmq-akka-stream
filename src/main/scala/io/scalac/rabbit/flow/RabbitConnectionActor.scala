@@ -34,10 +34,13 @@ class RabbitConnectionActor(address: InetSocketAddress) extends Actor with Actor
       val conn = factory.newConnection()
       connections = conn :: connections
       client ! conn
+      log.info(s"Connected to RabbitMQ server on $address")
     case msg => log.error(s"Received unknown message $msg")
   }
   
-  override def postStop() = {
-    connections.foreach(_.close())
-  }
+  override def postStop() =
+    connections foreach { conn => 
+      log.info("Closing connection")
+      conn.close() 
+    }
 }
