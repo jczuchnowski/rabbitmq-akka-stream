@@ -12,6 +12,7 @@ import java.net.InetSocketAddress
 import QueueRegistry._
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import akka.stream.scaladsl.Duct
 
 object QueueRegistry {
 
@@ -29,9 +30,9 @@ object QueueRegistry {
  * 
  * Depending on your domain you could for example call some external services or actors here.
  */
-object MyDomainProcessing extends Function1[Flow[RabbitMessage], Flow[String]] {
+object MyDomainProcessing {
   
-  def apply(input: Flow[RabbitMessage]) = input
+  def apply() = Duct.apply[RabbitMessage]
     .map(_.body)                     // extract message body
     .filter(!_.contains("terror"))   // filter out dangerous messages 
     .map( msg => {
@@ -55,6 +56,7 @@ object ConsumerApp extends App {
     RabbitConnectionActor.props(new InetSocketAddress("127.0.0.1", 5672))
   )
   
+  
   /*
    * Ask for a connection and start processing.
    */
@@ -62,12 +64,14 @@ object ConsumerApp extends App {
     
     val consumerFlow = new RabbitConsumer(RabbitBinding(INBOUND_EXCHANGE, INBOUND_QUEUE)).flow
 
-    val publisherFlow = new RabbitPublisher(RabbitBinding(OUTBOUND_EXCHANGE, OUTBOUND_QUEUE)).flow
+    val domainProcessingDuct = MyDomainProcessing()
+    
+    val publisherDuct = new RabbitPublisher(RabbitBinding(OUTBOUND_EXCHANGE, OUTBOUND_QUEUE)).flow
     
     /*
      * the actual flow initialization
      */
-    (MyDomainProcessing andThen publisherFlow)(consumerFlow).consume(materializer)
+    consumerFlow append domainProcessingDuct append publisherDuct consume(materializer)
   }
 
 }

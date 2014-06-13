@@ -3,6 +3,7 @@ package io.scalac.rabbit.flow
 import akka.stream.scaladsl.Flow
 import com.rabbitmq.client.Channel
 import com.rabbitmq.client.Connection
+import akka.stream.scaladsl.Duct
 
 /**
  * Wraps the action of publishing to a RabbitMQ channel and exposes it as a Flow processing.
@@ -13,8 +14,8 @@ class RabbitPublisher(binding: RabbitBinding)(implicit connection: Connection) e
 
   val channel = initChannel(binding)
   
-  val flow: Flow[String] => Flow[Unit] = 
-    input => input foreach { 
+  val flow: Duct[String, Unit] = 
+    Duct[String] foreach { 
       msg => channel.basicPublish(binding.exchange, "", null, msg.getBytes()) 
     }
   
