@@ -42,7 +42,7 @@ class RabbitConsumerActor(binding: RabbitBinding)(implicit connection: Connectio
     case Cancel =>
       // nothing to do in this scenario
     case msg: RabbitMessage => 
-      log.debug(s"received message from RabbitMQ: ${msg.deliveryTag}")
+      log.debug(s"received ${msg.deliveryTag}")
       if (isActive && totalDemand > 0) {
         onNext(msg)
       } else {
