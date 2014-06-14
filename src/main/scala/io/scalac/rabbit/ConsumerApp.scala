@@ -17,11 +17,14 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 
 object QueueRegistry {
 
-  val INBOUND_EXCHANGE = "rabitAkkaStreamInboundExchange"
-  val INBOUND_QUEUE = "rabbitAkkaStreamInboundQueue"
+  val INBOUND_EXCHANGE = "censorship.inbound.exchange"
+  val INBOUND_QUEUE = "censorship.inbound.queue"
     
-  val OUTBOUND_EXCHANGE = "rabitAkkaStreamOutboundExchange"
-  val OUTBOUND_QUEUE = "rabbitAkkaStreamOutboundQueue"
+  val OUT_OK_EXCHANGE = "censorship.ok.exchange"
+  val OUT_OK_QUEUE = "censorship.ok.queue"
+  
+  val OUT_NOK_EXCHANGE = "censorship.nok.exchange"
+  val OUT_NOK_QUEUE = "censorship.nok.queue"
   
 }
 
@@ -33,23 +36,26 @@ object QueueRegistry {
  */
 object MyDomainProcessing extends LazyLogging {
   
-  def apply() = Duct.apply[RabbitMessage]
+  def apply() = Duct[RabbitMessage].
   
     // extract message body
-    .map(_.body)
-    
-    // filter out dangerous messages
-    .filter(!_.contains("terror"))
+    map(_.body).
     
     // do something time consuming - like go to sleep
     // then log the message text
-    .map( msg => {
+    map( msg => {
       Thread.sleep(2000)
       logger.info(msg)
-      msg })
-      
-    // add the censorship mark
-    .map(_ + "\nmessage processed")
+      msg }).
+
+    // classify
+    map(CensorshipService.classify(_)).
+    
+    // split by classification and assign an outbound exchange
+    groupBy { 
+      case MessageSafe(msg) => OUT_OK_EXCHANGE
+      case MessageThreat(msg) => OUT_NOK_EXCHANGE
+    }
 }
 
 object ConsumerApp extends App {
@@ -76,12 +82,33 @@ object ConsumerApp extends App {
 
     val domainProcessingDuct = MyDomainProcessing()
     
-    val publisherDuct = new RabbitPublisher(RabbitBinding(OUTBOUND_EXCHANGE, OUTBOUND_QUEUE)).flow
+    val okPublisherDuct = new RabbitPublisher(RabbitBinding(OUT_OK_EXCHANGE, OUT_OK_QUEUE)).flow
+    val nokPublisherDuct = new RabbitPublisher(RabbitBinding(OUT_NOK_EXCHANGE, OUT_NOK_QUEUE)).flow
+    
+    val publisherDuct: String => Duct[String, Unit] = ex => ex match {
+      case OUT_OK_EXCHANGE => okPublisherDuct
+      case OUT_NOK_EXCHANGE => nokPublisherDuct
+    }
     
     /*
-     * the actual flow initialization
+     * connect the flows with ducts and consume
      */
-    consumerFlow append domainProcessingDuct append publisherDuct consume(materializer)
+    consumerFlow append domainProcessingDuct map { 
+      case (exchange, producer) => 
+        
+        // start a new flow for each message type
+        Flow(producer)
+        
+          // extract the message
+          .map(_.message) 
+          
+          // add the outbound publishing duct
+          .append(publisherDuct(exchange))
+          
+          // and start the flow
+          .consume(materializer)
+        
+    } consume(materializer)
   }
 
 }
