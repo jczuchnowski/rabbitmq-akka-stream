@@ -2,18 +2,18 @@ package io.scalac.rabbit
 
 import akka.actor.ActorSystem
 import akka.pattern.ask
-import akka.stream.scaladsl.Flow
+import akka.stream.actor.ActorProducer
+import akka.stream.scaladsl.{Duct, Flow}
 import akka.stream.{FlowMaterializer, MaterializerSettings}
 import akka.util.Timeout
 import com.rabbitmq.client.Connection
+import com.typesafe.scalalogging.slf4j.LazyLogging
 import io.scalac.rabbit.flow._
 import io.scalac.rabbit.flow.RabbitConnectionActor.Connect
 import java.net.InetSocketAddress
 import QueueRegistry._
 import scala.concurrent.duration._
 import scala.language.postfixOps
-import akka.stream.scaladsl.Duct
-import com.typesafe.scalalogging.slf4j.LazyLogging
 
 object QueueRegistry {
 
@@ -26,6 +26,9 @@ object QueueRegistry {
   val OUT_NOK_EXCHANGE = "censorship.nok.exchange"
   val OUT_NOK_QUEUE = "censorship.nok.queue"
   
+  val IN_BINDING = RabbitBinding(INBOUND_EXCHANGE, INBOUND_QUEUE)
+  val OUT_OK_BINDING = RabbitBinding(OUT_OK_EXCHANGE, OUT_OK_QUEUE)
+  val OUT_NOK_BINDING = RabbitBinding(OUT_NOK_EXCHANGE, OUT_NOK_QUEUE)
 }
 
 /**
@@ -38,18 +41,25 @@ object MyDomainProcessing extends LazyLogging {
   
   def apply() = Duct[RabbitMessage].
   
+    // acknowledge and pass on
+    map { msg =>
+      msg.ack()
+      msg
+    }.
+    
     // extract message body
-    map(_.body).
+    map { _.body }.
     
     // do something time consuming - like go to sleep
     // then log the message text
-    map( msg => {
+    map { msg => 
       Thread.sleep(2000)
       logger.info(msg)
-      msg }).
+      msg 
+    }.
 
-    // classify
-    map(CensorshipService.classify(_)).
+    // call domain service
+    map { CensorshipService.classify }.
     
     // split by classification and assign an outbound exchange
     groupBy { 
@@ -78,12 +88,12 @@ object ConsumerApp extends App {
    */
   (connectionActor ? Connect).mapTo[Connection] map { implicit conn =>
     
-    val consumerFlow = new RabbitConsumer(RabbitBinding(INBOUND_EXCHANGE, INBOUND_QUEUE)).flow
-
+    val rabbitConsumer = ActorProducer(actorSystem.actorOf(RabbitConsumerActor.props(IN_BINDING)))
+    
     val domainProcessingDuct = MyDomainProcessing()
     
-    val okPublisherDuct = new RabbitPublisher(RabbitBinding(OUT_OK_EXCHANGE, OUT_OK_QUEUE)).flow
-    val nokPublisherDuct = new RabbitPublisher(RabbitBinding(OUT_NOK_EXCHANGE, OUT_NOK_QUEUE)).flow
+    val okPublisherDuct = new RabbitPublisher(OUT_OK_BINDING).flow
+    val nokPublisherDuct = new RabbitPublisher(OUT_NOK_BINDING).flow
     
     val publisherDuct: String => Duct[String, Unit] = ex => ex match {
       case OUT_OK_EXCHANGE => okPublisherDuct
@@ -91,9 +101,9 @@ object ConsumerApp extends App {
     }
     
     /*
-     * connect the flows with ducts and consume
+     * connect flows with ducts and consume
      */
-    consumerFlow append domainProcessingDuct map { 
+    Flow(rabbitConsumer) append domainProcessingDuct map { 
       case (exchange, producer) => 
         
         // start a new flow for each message type
