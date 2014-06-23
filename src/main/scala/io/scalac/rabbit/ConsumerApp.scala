@@ -48,7 +48,7 @@ object MyDomainProcessing extends LazyLogging {
     }.
     
     // extract message body
-    map { _.body }.
+    map { _.body.utf8String }.
     
     // do something time consuming - like go to sleep
     // then log the message text

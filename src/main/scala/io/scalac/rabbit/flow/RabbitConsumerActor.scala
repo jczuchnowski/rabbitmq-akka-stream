@@ -1,6 +1,7 @@
 package io.scalac.rabbit.flow
 
 import akka.actor.{ActorLogging, Props}
+import akka.util.ByteString
 import akka.stream.actor.ActorProducer
 import akka.stream.actor.ActorProducer._
 import com.rabbitmq.client._
@@ -30,7 +31,7 @@ class RabbitConsumerActor(binding: RabbitBinding)(implicit connection: Connectio
         envelope: Envelope, 
         properties: AMQP.BasicProperties, 
         body: Array[Byte]) = {
-      self ! new RabbitMessage(envelope.getDeliveryTag(), new String(body, "UTF-8"), channel)
+      self ! new RabbitMessage(envelope.getDeliveryTag(), ByteString(body), channel)
     }
   }
   
@@ -50,11 +51,8 @@ class RabbitConsumerActor(binding: RabbitBinding)(implicit connection: Connectio
       }
   }
   
-  private def register(ch: Channel, consumer: Consumer): Unit =  {
+  private def register(ch: Channel, consumer: Consumer): Unit =
     ch.basicConsume(binding.queue, autoAck, consumer)
-  }
   
-  override def postStop() = {
-    channel.close()
-  }
+  override def postStop() = channel.close()
 }
