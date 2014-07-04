@@ -15,16 +15,16 @@ resolvers ++= Seq(
 scalacOptions ++= Seq("-feature", "-unchecked", "-deprecation", "-encoding", "utf8")
 
 libraryDependencies ++= {
-  val akkaVersion = "2.3.3"
+  val akkaVersion = "2.3.4"
   Seq(
-    "com.typesafe.akka"          %%  "akka-stream-experimental" % "0.3",
-    "com.rabbitmq"               %   "amqp-client"              % "3.3.1",
+    "com.typesafe.akka"          %%  "akka-stream-experimental" % "0.4",
+    "com.rabbitmq"               %   "amqp-client"              % "3.3.4",
     "com.typesafe.scala-logging" %%  "scala-logging-slf4j"      % "2.1.2",
     "ch.qos.logback"             %   "logback-core"             % "1.1.2",
     "ch.qos.logback"             %   "logback-classic"          % "1.1.2",
     "com.typesafe.akka"          %%  "akka-actor"               % akkaVersion,
     "com.typesafe.akka"          %%  "akka-slf4j"               % akkaVersion,
     "com.typesafe.akka"          %%  "akka-testkit"             % akkaVersion % "test",
-    "org.scalatest"              %%  "scalatest"                % "2.1.6" % "test"
+    "org.scalatest"              %%  "scalatest"                % "2.2.0" % "test"
   )
 }
