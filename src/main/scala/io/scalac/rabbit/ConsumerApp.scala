@@ -40,7 +40,12 @@ object QueueRegistry {
  */
 object MyDomainProcessing extends LazyLogging {
   
-  def apply(): Duct[RabbitMessage, (String, Producer[CensoredMessage])] = Duct[RabbitMessage].
+  /**
+   * Tuple assigning a RabbitMQ exchange name to a stream Producer.
+   */
+  type ExchangeMapping = (String, Producer[CensoredMessage])
+  
+  def apply(): Duct[RabbitMessage, ExchangeMapping] = Duct[RabbitMessage].
   
     // acknowledge and pass on
     map { msg =>
