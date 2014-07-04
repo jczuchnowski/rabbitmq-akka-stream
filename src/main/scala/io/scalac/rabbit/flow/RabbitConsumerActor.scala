@@ -41,12 +41,14 @@ class RabbitConsumerActor(binding: RabbitBinding)(implicit connection: Connectio
     case Request(elements) =>
       // nothing to do - we're waiting for the messages to come from RabbitMQ
     case Cancel =>
-      // nothing to do in this scenario
+      context.stop(self)
     case msg: RabbitMessage => 
       log.debug(s"received ${msg.deliveryTag}")
       if (isActive && totalDemand > 0) {
         onNext(msg)
       } else {
+        //requeue the message
+        //message ordering might not be preserved
         msg.nack()
       }
   }

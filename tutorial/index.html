@@ -46,7 +46,7 @@
         </p>
         <h3>Consuming messages</h3>
         <p>
-        <code>RabbitConsumerActor</code> is responsible for initializing a channel to the queue and registering 
+        <a href="#code/src/main/scala/io/scalac/rabbit/flow/RabbitConsumerActor.scala" class="shortcut">RabbitConsumerActor</a> is responsible for initializing a channel to the queue and registering 
         a consumer for that queue. It will then serve as a stream <code>Producer</code>, by calling <code>onNext</code> whenever a new message comes from the server and the stream is ready to process it. Otherwise the message will be rejected and requeued on RabbitMQ.
         </p>
         <h3>Processing messages</h3>
@@ -55,12 +55,12 @@
         </p>
         <h3>Publishing back to RabbitMQ</h3>
         <p>
-        <code>RabbitPublisher</code> is responsible for initializing an outgoing channel. 
+        <a href="#code/src/main/scala/io/scalac/rabbit/flow/RabbitPublisher.scala" class="shortcut">RabbitPublisher</a> is responsible for initializing an outgoing channel. 
         It also creates a <code>Duct</code> containing the logic for publishing a message back to a RabbitMQ exchange.
         </p>
         <h3>Putting it all together</h3>
         <p>
-        After receiving a connection from <code>RabbitConnectionActor</code> we combine these functions and call <code>consume()</code> on the final flow. Simplified code would look something like this:
+        After receiving a connection from <a href="#code/src/main/scala/io/scalac/rabbit/flow/RabbitConnectionActor.scala" class="shortcut">RabbitConnectionActor</a> we combine these functions and call <code>consume()</code> on the final flow. Simplified code would look something like this:
         </p>
         <pre><code>(Flow(rabbitConsumer) append domainProcessingDuct append publisherDuct).consume(materializer)</code></pre>
     </div>
@@ -69,5 +69,11 @@
         <p>
         You just saw a clean functional way of working with RabbitMQ. There are of course many issues that haven't been addressed here, like the RabbitMQ Quality of Service property or rejecting messages at later stages of processing (to name a few). Also this is just a simple wrapper over the official RabbitMQ client, not a complete solution. But this should get you going and hopefully this is the way we'll be doing things in the future.
         </p>
+        <p>
+        Further reading:
+        </p>
+        <ul>
+            <li><a href="http://blog.scalac.io/2014/06/23/akka-streams-and-rabbitmq.html">Blog post about Akka Streams and RabbitMQ</a></li>
+        </ul>
     </div>
 </body>
