@@ -14,6 +14,7 @@ import java.net.InetSocketAddress
 import QueueRegistry._
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import org.reactivestreams.api.Producer
 
 object QueueRegistry {
 
@@ -39,7 +40,12 @@ object QueueRegistry {
  */
 object MyDomainProcessing extends LazyLogging {
   
-  def apply() = Duct[RabbitMessage].
+  /**
+   * Tuple assigning a RabbitMQ exchange name to a stream Producer.
+   */
+  type ExchangeMapping = (String, Producer[CensoredMessage])
+  
+  def apply(): Duct[RabbitMessage, ExchangeMapping] = Duct[RabbitMessage].
   
     // acknowledge and pass on
     map { msg =>
