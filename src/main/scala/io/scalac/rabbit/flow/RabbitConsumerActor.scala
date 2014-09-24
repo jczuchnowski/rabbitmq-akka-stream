@@ -2,8 +2,8 @@ package io.scalac.rabbit.flow
 
 import akka.actor.{ActorLogging, Props}
 import akka.util.ByteString
-import akka.stream.actor.ActorProducer
-import akka.stream.actor.ActorProducer._
+import akka.stream.actor.ActorPublisher
+import akka.stream.actor.ActorPublisherMessage._
 import com.rabbitmq.client._
 
 object RabbitConsumerActor {
@@ -17,7 +17,7 @@ object RabbitConsumerActor {
  * At the same time it will play the role of a <code>Producer</code> for our processing <code>Flow</code>.
  */
 class RabbitConsumerActor(binding: RabbitBinding)(implicit connection: Connection) extends 
-    ActorProducer[RabbitMessage] with
+    ActorPublisher[RabbitMessage] with
     ActorLogging with
     ChannelInitializer {
   

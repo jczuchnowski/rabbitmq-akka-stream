@@ -2,9 +2,9 @@ package io.scalac.rabbit
 
 import akka.actor.ActorSystem
 import akka.pattern.ask
-import akka.stream.actor.ActorProducer
-import akka.stream.scaladsl.{Duct, Flow}
-import akka.stream.{FlowMaterializer, MaterializerSettings}
+import akka.stream.actor.ActorPublisher
+import akka.stream.MaterializerSettings
+import akka.stream.scaladsl2.FlowMaterializer
 import akka.util.Timeout
 import com.rabbitmq.client.Connection
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -14,7 +14,13 @@ import java.net.InetSocketAddress
 import QueueRegistry._
 import scala.concurrent.duration._
 import scala.language.postfixOps
-import org.reactivestreams.api.Producer
+import org.reactivestreams.Publisher
+import akka.stream.scaladsl2.ProcessorFlow
+import akka.stream.scaladsl2.FlowGraph
+import akka.stream.scaladsl2.FlowFrom
+import akka.stream.scaladsl2.FlowWithSource
+import akka.stream.scaladsl2.PublisherSink
+import akka.stream.scaladsl2.SubscriberSource
 
 object QueueRegistry {
 
@@ -43,9 +49,9 @@ object MyDomainProcessing extends LazyLogging {
   /**
    * Tuple assigning a RabbitMQ exchange name to a stream Producer.
    */
-  type ExchangeMapping = (String, Producer[CensoredMessage])
+  type ExchangeMapping = (String, FlowWithSource[CensoredMessage, CensoredMessage])
   
-  def apply(): Duct[RabbitMessage, ExchangeMapping] = Duct[RabbitMessage].
+  def apply(): ProcessorFlow[RabbitMessage, ExchangeMapping] = FlowFrom[RabbitMessage].
   
     // acknowledge and pass on
     map { msg =>
@@ -82,7 +88,7 @@ object ConsumerApp extends App {
   
   implicit val executor = actorSystem.dispatcher
   
-  val materializer = FlowMaterializer(MaterializerSettings())
+  implicit val materializer = FlowMaterializer(MaterializerSettings(actorSystem))
   
   val connectionActor = actorSystem.actorOf(
     RabbitConnectionActor.props(new InetSocketAddress("127.0.0.1", 5672))
@@ -94,37 +100,60 @@ object ConsumerApp extends App {
    */
   (connectionActor ? Connect).mapTo[Connection] map { implicit conn =>
     
-    val rabbitConsumer = ActorProducer(actorSystem.actorOf(RabbitConsumerActor.props(IN_BINDING)))
+    val rabbitConsumer = ActorPublisher(actorSystem.actorOf(RabbitConsumerActor.props(IN_BINDING)))
     
     val domainProcessingDuct = MyDomainProcessing()
     
-    val okPublisherDuct = new RabbitPublisher(OUT_OK_BINDING).flow
-    val nokPublisherDuct = new RabbitPublisher(OUT_NOK_BINDING).flow
+    val okPublisherFlow = new RabbitPublisher(OUT_OK_BINDING).flow
+    val nokPublisherFlow = new RabbitPublisher(OUT_NOK_BINDING).flow
     
-    val publisherDuct: String => Duct[String, Unit] = ex => ex match {
-      case OUT_OK_EXCHANGE => okPublisherDuct
-      case OUT_NOK_EXCHANGE => nokPublisherDuct
+    val publisherDuct: String => ProcessorFlow[String, Unit] = ex => ex match {
+      case OUT_OK_EXCHANGE => okPublisherFlow
+      case OUT_NOK_EXCHANGE => nokPublisherFlow
     }
     
     /*
      * connect flows with ducts and consume
-     */
-    Flow(rabbitConsumer) append domainProcessingDuct map { 
-      case (exchange, producer) => 
+     */    
+    val mainGraph = FlowGraph { implicit b =>
+      domainProcessingDuct map { 
+        case (exchange, producer) => 
         
         // start a new flow for each message type
-        Flow(producer)
+        val innerGraph = FlowGraph { implicit c =>
         
+          producer
+          
           // extract the message
           .map(_.message) 
           
           // add the outbound publishing duct
           .append(publisherDuct(exchange))
-          
-          // and start the flow
-          .consume(materializer)
+        }.run()
         
-    } consume(materializer)
+        val pub = PublisherSink[String].publisher(innerGraph)
+      }
+      
+    }.run()
+    
+    SubscriberSource[RabbitMessage].subscriber(mainGraph)
+    
+//    Flow(rabbitConsumer) append domainProcessingDuct map { 
+//      case (exchange, producer) => 
+//        
+//        // start a new flow for each message type
+//        Flow(producer)
+//        
+//          // extract the message
+//          .map(_.message) 
+//          
+//          // add the outbound publishing duct
+//          .append(publisherDuct(exchange))
+//          
+//          // and start the flow
+//          .consume()
+//        
+//    } consume()
   }
 
 }
