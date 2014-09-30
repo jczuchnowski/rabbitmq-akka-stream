@@ -1,9 +1,11 @@
 package io.scalac.rabbit.flow
 
 import akka.actor._
-import com.rabbitmq.client.Connection
-import com.rabbitmq.client.ConnectionFactory
+
+import com.rabbitmq.client.{Connection, ConnectionFactory}
+
 import java.net.InetSocketAddress
+
 
 object RabbitConnectionActor {
 

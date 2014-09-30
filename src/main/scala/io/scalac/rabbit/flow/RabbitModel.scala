@@ -30,7 +30,7 @@ class RabbitMessage(val deliveryTag: Long, val body: ByteString, channel: Channe
 }
 
 /**
- * Exchange and queue names.
+ * Exchanges, queues and bindings.
  */
 case class RabbitBinding(exchange: String, queue: String)
 

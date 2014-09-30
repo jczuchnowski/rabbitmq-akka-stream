@@ -1,9 +1,10 @@
 package io.scalac.rabbit.flow
 
 import akka.actor.{ActorLogging, Props}
-import akka.util.ByteString
 import akka.stream.actor.ActorPublisher
 import akka.stream.actor.ActorPublisherMessage._
+import akka.util.ByteString
+
 import com.rabbitmq.client._
 
 object RabbitConsumerActor {
@@ -43,7 +44,8 @@ class RabbitConsumerActor(binding: RabbitBinding)(implicit connection: Connectio
     case Cancel =>
       context.stop(self)
     case msg: RabbitMessage => 
-      log.debug(s"received ${msg.deliveryTag}")
+      log.debug(s"received msg with deliveryTag ${msg.deliveryTag}")
+      log.debug(s"RabbitConsumer is $isActive and the total demand is $totalDemand")
       if (isActive && totalDemand > 0) {
         onNext(msg)
       } else {
