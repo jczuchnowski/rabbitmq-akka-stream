@@ -18,7 +18,9 @@ import io.scalac.rabbit.QueueRegistry._
 import java.net.InetSocketAddress
 
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
+import scala.util.Random
 
 object QueueRegistry {
 
@@ -49,7 +51,18 @@ object MyDomainProcessing extends LazyLogging {
    */
   type ExchangeMapping = (String, FlowWithSource[CensoredMessage, CensoredMessage])
   
-  def apply(): ProcessorFlow[RabbitMessage, ExchangeMapping] = FlowFrom[RabbitMessage].
+  /*
+   *  do something time consuming - like go to sleep
+   *  then log the message text
+   */
+  def expensiveCall(msg: String)(implicit ec: ExecutionContext): Future[String] = Future {
+    val millis = Random.nextInt(2000) + 1000
+ 		logger.info(s"message: '$msg' \n will be held for $millis ms")
+    Thread.sleep(millis)
+    msg
+  }
+  
+  def apply()(implicit ex: ExecutionContext): ProcessorFlow[RabbitMessage, ExchangeMapping] = FlowFrom[RabbitMessage].
   
     // acknowledge and pass on
     map { msg =>
@@ -60,13 +73,8 @@ object MyDomainProcessing extends LazyLogging {
     // extract message body
     map { _.body.utf8String }.
     
-    // do something time consuming - like go to sleep
-    // then log the message text
-    map { msg => 
-      Thread.sleep(2000)
-      logger.info(msg)
-      msg 
-    }.
+    // do something time consuming
+    mapFuture { expensiveCall }.
 
     // call domain service
     map { CensorshipService.classify }.
@@ -84,7 +92,7 @@ object ConsumerApp extends App {
   
   implicit val actorSystem = ActorSystem("rabbit-akka-stream")
   
-  implicit val executor = actorSystem.dispatcher
+  implicit val executionContext = actorSystem.dispatcher
   
   implicit val materializer = FlowMaterializer(MaterializerSettings(actorSystem))
   
