@@ -51,12 +51,11 @@
         </p>
         <h3>Processing messages</h3>
         <p>
-        To split the work into logical parts we are using <code>Duct[In, Out]</code>. This allows us to define some message processing independently from the <code>Flow</code> and connect the two later.
+        To split the work into logical parts we are using <code>ProcessorFlow[In, Out]</code> on which we're applying multiple transformations (like map, mapFuture, groupBy). This allows us to define some message processing independently from the publisher and connect the two later.
         </p>
         <h3>Publishing back to RabbitMQ</h3>
         <p>
-        <a href="#code/src/main/scala/io/scalac/rabbit/flow/RabbitPublisher.scala" class="shortcut">RabbitPublisher</a> is responsible for initializing an outgoing channel. 
-        It also creates a <code>Duct</code> containing the logic for publishing a message back to a RabbitMQ exchange.
+        <a href="#code/src/main/scala/io/scalac/rabbit/flow/RabbitPublisherActor.scala" class="shortcut">RabbitPublisherActor</a> is responsible for initializing an outgoing channel and publishing messages it gets from the flow. 
         </p>
         <h3>Putting it all together</h3>
         <p>
