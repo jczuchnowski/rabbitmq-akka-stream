@@ -4,7 +4,7 @@ version := "1.0"
 
 organization := "io.scalac"
 
-scalaVersion := "2.11.1"
+scalaVersion := "2.11.4"
 
 resolvers ++= Seq(
   "snapshots"           at "http://oss.sonatype.org/content/repositories/snapshots",
@@ -14,11 +14,14 @@ resolvers ++= Seq(
 
 scalacOptions ++= Seq("-feature", "-unchecked", "-deprecation", "-encoding", "utf8")
 
+//doesn't work with Activator
+//EclipseKeys.withSource := true
+
 libraryDependencies ++= {
   val akkaVersion = "2.3.6"
   Seq(
-    "com.typesafe.akka"          %%  "akka-stream-experimental" % "0.7",
-    "com.rabbitmq"               %   "amqp-client"              % "3.3.5",
+    "com.typesafe.akka"          %%  "akka-stream-experimental" % "0.10",
+    "io.scalac"                  %%  "reactive-rabbit"          % "0.2.0",
     "com.typesafe.scala-logging" %%  "scala-logging-slf4j"      % "2.1.2",
     "ch.qos.logback"             %   "logback-core"             % "1.1.2",
     "ch.qos.logback"             %   "logback-classic"          % "1.1.2",

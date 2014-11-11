@@ -1,57 +1,78 @@
 package io.scalac.rabbit
 
-import scala.concurrent.duration._
+import scala.concurrent.{Future, Promise}
+import scala.util.{Failure, Success}
 
-import akka.actor.{ActorRef, ActorSystem}
-import akka.pattern.ask
-import akka.stream.actor.ActorPublisher
-import akka.stream.MaterializerSettings
-import akka.stream.scaladsl2._
-import akka.util.Timeout
+import akka.actor.ActorSystem
 
-import com.rabbitmq.client.Connection
+import akka.stream.{FlowMaterializer, MaterializerSettings}
+import akka.stream.scaladsl._
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import io.scalac.rabbit.flow._
-import io.scalac.rabbit.flow.RabbitConnectionActor.Connect
-import io.scalac.rabbit.flow.RabbitPublisherActor.MessageToPublish
-import io.scalac.rabbit.QueueRegistry._
+import io.scalac.amqp.{Connection, Direct, Exchange, Queue}
 
-import java.net.InetSocketAddress
+import io.scalac.rabbit.DeclarationsRegistry._
 
 
-object ConsumerApp extends App with LazyLogging {
+object ConsumerApp extends App with FlowFactory with LazyLogging {
 
-  implicit val timeout = Timeout(2 seconds)
-  
   implicit val actorSystem = ActorSystem("rabbit-akka-stream")
   
-  implicit val executionContext = actorSystem.dispatcher
+  implicit val executionConext = actorSystem.dispatcher
   
   implicit val materializer = FlowMaterializer(MaterializerSettings(actorSystem))
   
-  val connectionActor = actorSystem.actorOf(
-    RabbitConnectionActor.props(new InetSocketAddress("127.0.0.1", 5672))
-  )
+  val connection = Connection()
   
-  /*
-   * Ask for a connection and start processing.
-   */
-  (connectionActor ? Connect).mapTo[Connection] map { implicit conn =>
+  setupRabbit() onComplete { 
+    case Success(_) =>
+      logger.info("Exchanges, queues and bindings declared successfully.")
     
-    logger.info("connected to RabbitMQ")
+      val rabbitConsumer = Source(connection.consume(inboundQueue.name))
+      val rabbitPublisher = Sink(connection.publish(outboundExchange.name))
+      
+      val flow = rabbitConsumer via consumerMapping via domainProcessing via publisherMapping to rabbitPublisher
     
-    val rabbitConsumer = ActorPublisher[RabbitMessage](actorSystem.actorOf(RabbitConsumerActor.props(IN_BINDING)))
-    val okPublisherActor = actorSystem.actorOf(RabbitPublisherActor.props(OUT_OK_BINDING))
-    val nokPublisherActor = actorSystem.actorOf(RabbitPublisherActor.props(OUT_NOK_BINDING))
+      logger.info("Starting the flow")
+      flow.run()
+    case Failure(ex) =>
+      logger.error("Failed to declare RabbitMQ objects.", ex)
+  }  
     
-    val domainProcessing = DomainFlowFactory.domainProcessingflow()
-    val messageRouter = DomainFlowFactory.messageRoutingFlow(okPublisherActor, nokPublisherActor)
+  def setupRabbit(): Future[List[Any]] = {
     
-    val flow = FlowFrom(rabbitConsumer) append domainProcessing append messageRouter
-    
-    flow consume()
-  }
+    val declarations: List[Future[Any]] = 
+      List(
+        connection.exchangeDeclare(inboundExchange), 
+        connection.exchangeDeclare(outboundExchange), 
+        connection.queueDeclare(inboundQueue), 
+        connection.queueDeclare(outOkQueue), 
+        connection.queueDeclare(outNokQueue))
 
+    val futureDeclarations = processFutures(declarations)
+        
+    futureDeclarations flatMap { _ =>
+
+      val bindings: List[Future[Any]] = 
+	      List(
+	        connection.queueBind(inboundQueue.name, inboundExchange.name, ""), 
+	        connection.queueBind(outOkQueue.name, outboundExchange.name, outOkQueue.name), 
+	        connection.queueBind(outNokQueue.name, outboundExchange.name, outNokQueue.name))
+
+	    processFutures(bindings)
+    }
+  }  
+
+  def processFutures(ops: List[Future[Any]]): Future[List[Any]] = {
+    val promiseOps = Promise[List[Any]]()
+    
+    ops foreach { _.onFailure { 
+        case th => promiseOps.tryFailure(th) 
+    }}
+
+    Future.sequence(ops).foreach(promiseOps trySuccess _)
+
+    promiseOps.future
+  }
 }
