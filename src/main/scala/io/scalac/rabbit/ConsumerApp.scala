@@ -1,16 +1,16 @@
 package io.scalac.rabbit
 
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 import akka.actor.ActorSystem
 
-import akka.stream.{FlowMaterializer, MaterializerSettings}
-import akka.stream.scaladsl._
+import akka.stream.FlowMaterializer
+import akka.stream.scaladsl.{Source, Sink}
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import io.scalac.amqp.{Connection, Direct, Exchange, Queue}
+import io.scalac.amqp.Connection
 
 import io.scalac.rabbit.DeclarationsRegistry._
 
@@ -19,9 +19,9 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
 
   implicit val actorSystem = ActorSystem("rabbit-akka-stream")
   
-  implicit val executionConext = actorSystem.dispatcher
+  import actorSystem.dispatcher
   
-  implicit val materializer = FlowMaterializer(MaterializerSettings(actorSystem))
+  implicit val materializer = FlowMaterializer()
   
   val connection = Connection()
   
@@ -37,42 +37,28 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
       logger.info("Starting the flow")
       flow.run()
     case Failure(ex) =>
-      logger.error("Failed to declare RabbitMQ objects.", ex)
+      logger.error("Failed to declare RabbitMQ infrastructure.", ex)
   }  
     
-  def setupRabbit(): Future[List[Any]] = {
-    
-    val declarations: List[Future[Any]] = 
-      List(
-        connection.exchangeDeclare(inboundExchange), 
-        connection.exchangeDeclare(outboundExchange), 
-        connection.queueDeclare(inboundQueue), 
-        connection.queueDeclare(outOkQueue), 
-        connection.queueDeclare(outNokQueue))
-
-    val futureDeclarations = processFutures(declarations)
+  def setupRabbit(): Future[List[Any]] =
+    Future.sequence { List(
         
-    futureDeclarations flatMap { _ =>
+      /* declare and bind inbound exchange and queue */
+      Future.sequence {
+        connection.exchangeDeclare(inboundExchange) :: 
+        connection.queueDeclare(inboundQueue) :: Nil
+      } map { _ =>
+	      connection.queueBind(inboundQueue.name, inboundExchange.name, "")          
+      },
 
-      val bindings: List[Future[Any]] = 
-	      List(
-	        connection.queueBind(inboundQueue.name, inboundExchange.name, ""), 
-	        connection.queueBind(outOkQueue.name, outboundExchange.name, outOkQueue.name), 
-	        connection.queueBind(outNokQueue.name, outboundExchange.name, outNokQueue.name))
-
-	    processFutures(bindings)
+      /* declare and bind outbound exchange and queues */
+      Future.sequence {
+        connection.exchangeDeclare(outboundExchange) :: 
+        connection.queueDeclare(outOkQueue) ::
+        connection.queueDeclare(outNokQueue) :: Nil
+      } map { _ => 
+        connection.queueBind(outOkQueue.name, outboundExchange.name, outOkQueue.name) ::
+	      connection.queueBind(outNokQueue.name, outboundExchange.name, outNokQueue.name) :: Nil
+      })
     }
-  }  
-
-  def processFutures(ops: List[Future[Any]]): Future[List[Any]] = {
-    val promiseOps = Promise[List[Any]]()
-    
-    ops foreach { _.onFailure { 
-        case th => promiseOps.tryFailure(th) 
-    }}
-
-    Future.sequence(ops).foreach(promiseOps trySuccess _)
-
-    promiseOps.future
-  }
 }

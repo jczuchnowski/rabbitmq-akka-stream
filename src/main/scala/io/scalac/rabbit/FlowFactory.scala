@@ -22,15 +22,11 @@ import io.scalac.rabbit.DeclarationsRegistry._
  */
 trait FlowFactory extends LazyLogging {
   
-  /**
-   * Flow responsible for mapping the incoming RabbitMQ message to our domain input. 
-   */
+  /** Flow responsible for mapping the incoming RabbitMQ message to our domain input. */
   def consumerMapping: Flow[Delivery, ByteString] =
     Flow[Delivery].map(_.message.body)
   
-  /**
-   * Flow performing our domain processing.
-   */
+  /** Flow performing our domain processing. */
   def domainProcessing(implicit ex: ExecutionContext): Flow[ByteString, CensoredMessage] = 
     Flow[ByteString].
   
@@ -43,9 +39,7 @@ trait FlowFactory extends LazyLogging {
     // classify message
     map { DomainService.classify }
     
-  /**
-   * Flow responsible for mapping the domain processing result into a RabbitMQ message
-   */
+  /** Flow responsible for mapping the domain processing result into a RabbitMQ message. */
   def publisherMapping: Flow[CensoredMessage, Routed] = 
     Flow[CensoredMessage] map(cMsg => cMsg match {
       case MessageSafe(msg) => Routed(routingKey = outOkQueue.name, Message(body = ByteString(cMsg.message)))

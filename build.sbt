@@ -1,6 +1,6 @@
 name := "rabbitmq-akka-stream"
 
-version := "1.0"
+version := "2.0"
 
 organization := "io.scalac"
 
@@ -18,16 +18,13 @@ scalacOptions ++= Seq("-feature", "-unchecked", "-deprecation", "-encoding", "ut
 //EclipseKeys.withSource := true
 
 libraryDependencies ++= {
-  val akkaVersion = "2.3.6"
   Seq(
+    "com.typesafe.akka"          %%  "akka-actor"               % "2.3.7",
     "com.typesafe.akka"          %%  "akka-stream-experimental" % "0.10",
-    "io.scalac"                  %%  "reactive-rabbit"          % "0.2.0",
+    "io.scalac"                  %%  "reactive-rabbit"          % "0.2.1",
     "com.typesafe.scala-logging" %%  "scala-logging-slf4j"      % "2.1.2",
     "ch.qos.logback"             %   "logback-core"             % "1.1.2",
     "ch.qos.logback"             %   "logback-classic"          % "1.1.2",
-    "com.typesafe.akka"          %%  "akka-actor"               % akkaVersion,
-    "com.typesafe.akka"          %%  "akka-slf4j"               % akkaVersion,
-    "com.typesafe.akka"          %%  "akka-testkit"             % akkaVersion % "test",
     "org.scalatest"              %%  "scalatest"                % "2.2.1" % "test"
   )
 }

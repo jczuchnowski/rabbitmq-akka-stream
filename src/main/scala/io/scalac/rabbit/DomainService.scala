@@ -16,26 +16,22 @@ object DomainService extends LazyLogging {
   
   val unsafeWords = Set("terror")
   
-  /**
-   * Classify message based on keyword content.
-   */
+  /** Classify message based on keyword content. */
   def classify(msg: String): CensoredMessage = {
-    val safe = unsafeWords.foldLeft(true) { (in, word) => in && !msg.contains(word) }
+    val unsafe = unsafeWords.exists(msg.contains)
    
-    val processedMessage = msg + "\nmessage processed"
+    val processedMessage = msg + "\n[message processed]"
    
-    if (safe) {
-      logger.debug("message classified as 'safe'")
-      MessageSafe(processedMessage)
-    } else {
+    if (unsafe) {
       logger.debug("message classified as 'threat'")
       MessageThreat(processedMessage)
+    } else {
+      logger.debug("message classified as 'safe'")
+      MessageSafe(processedMessage)
     }
   }
   
-  /*
-   *  Do something time consuming - like go to sleep.
-   */
+  /** Do something time consuming - like go to sleep. */
   def expensiveCall(msg: String)(implicit ec: ExecutionContext): Future[String] = Future {
     val millis = Random.nextInt(2000) + 1000
     logger.debug(s"message: '$msg' \n will be held for $millis ms")
