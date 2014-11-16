@@ -11,7 +11,7 @@ import akka.stream.scaladsl.{OnCompleteSink, Source, Sink}
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import io.scalac.amqp.{Connection, Message}
+import io.scalac.amqp.{Connection, Message, Queue}
 
 import io.scalac.rabbit.RabbitRegistry._
 
@@ -44,15 +44,17 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
       logger.error("Failed to declare RabbitMQ infrastructure.", ex)
   }  
   
-  def setupRabbit(): Future[Unit] =
+  def setupRabbit(): Future[List[Queue.BindOk]] =
     Future.sequence(List(
         
       /* declare and bind inbound exchange and queue */
       Future.sequence {
         connection.exchangeDeclare(inboundExchange) :: 
         connection.queueDeclare(inboundQueue) :: Nil
-      } map { _ =>
-	      connection.queueBind(inboundQueue.name, inboundExchange.name, "")          
+      } flatMap { _ =>
+        Future.sequence {
+	        connection.queueBind(inboundQueue.name, inboundExchange.name, "") :: Nil
+        }
       },
 
       /* declare and bind outbound exchange and queues */
@@ -60,11 +62,13 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
         connection.exchangeDeclare(outboundExchange) :: 
         connection.queueDeclare(outOkQueue) ::
         connection.queueDeclare(outNokQueue) :: Nil
-      } map { _ => 
-        connection.queueBind(outOkQueue.name, outboundExchange.name, outOkQueue.name) ::
-	      connection.queueBind(outNokQueue.name, outboundExchange.name, outNokQueue.name) :: Nil
+      } flatMap { _ =>
+        Future.sequence {
+          connection.queueBind(outOkQueue.name, outboundExchange.name, outOkQueue.name) ::
+	        connection.queueBind(outNokQueue.name, outboundExchange.name, outNokQueue.name) :: Nil
+        }
       }
-    )).map(_ => ())
+    )).map { _.flatten }
   
   /**
    * Trial run of couple of messages just to show that streaming through RabbitMQ actually works here.
