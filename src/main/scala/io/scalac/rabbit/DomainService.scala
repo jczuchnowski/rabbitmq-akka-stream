@@ -20,7 +20,7 @@ object DomainService extends LazyLogging {
   def classify(msg: String): CensoredMessage = {
     val unsafe = unsafeWords.exists(msg.contains)
    
-    val processedMessage = msg + "\n[message processed]"
+    val processedMessage = msg + " [message processed]"
    
     if (unsafe) {
       logger.debug("message classified as 'threat'")
