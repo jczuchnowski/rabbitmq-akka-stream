@@ -9,7 +9,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import io.scalac.amqp.{Delivery, Message, Routed}
 
-import io.scalac.rabbit.DeclarationsRegistry._
+import io.scalac.rabbit.RabbitRegistry._
 
 
 /**

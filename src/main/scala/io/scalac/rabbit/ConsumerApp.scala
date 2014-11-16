@@ -13,7 +13,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import io.scalac.amqp.{Connection, Message}
 
-import io.scalac.rabbit.DeclarationsRegistry._
+import io.scalac.rabbit.RabbitRegistry._
 
 
 object ConsumerApp extends App with FlowFactory with LazyLogging {
