@@ -53,7 +53,7 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
         connection.queueDeclare(inboundQueue) :: Nil
       } flatMap { _ =>
         Future.sequence {
-	        connection.queueBind(inboundQueue.name, inboundExchange.name, "") :: Nil
+	      connection.queueBind(inboundQueue.name, inboundExchange.name, "") :: Nil
         }
       },
 
@@ -65,7 +65,7 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
       } flatMap { _ =>
         Future.sequence {
           connection.queueBind(outOkQueue.name, outboundExchange.name, outOkQueue.name) ::
-	        connection.queueBind(outNokQueue.name, outboundExchange.name, outNokQueue.name) :: Nil
+	      connection.queueBind(outNokQueue.name, outboundExchange.name, outNokQueue.name) :: Nil
         }
       }
     )).map { _.flatten }
