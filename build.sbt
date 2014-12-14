@@ -1,10 +1,10 @@
 name := "rabbitmq-akka-stream"
 
-version := "1.0"
+version := "2.0"
 
 organization := "io.scalac"
 
-scalaVersion := "2.11.1"
+scalaVersion := "2.11.4"
 
 resolvers ++= Seq(
   "snapshots"           at "http://oss.sonatype.org/content/repositories/snapshots",
@@ -14,17 +14,17 @@ resolvers ++= Seq(
 
 scalacOptions ++= Seq("-feature", "-unchecked", "-deprecation", "-encoding", "utf8")
 
+//doesn't work with Activator
+//EclipseKeys.withSource := true
+
 libraryDependencies ++= {
-  val akkaVersion = "2.3.4"
   Seq(
-    "com.typesafe.akka"          %%  "akka-stream-experimental" % "0.4",
-    "com.rabbitmq"               %   "amqp-client"              % "3.3.4",
+    "com.typesafe.akka"          %%  "akka-actor"               % "2.3.7",
+    "com.typesafe.akka"          %%  "akka-stream-experimental" % "0.10",
+    "io.scalac"                  %%  "reactive-rabbit"          % "0.2.1",
     "com.typesafe.scala-logging" %%  "scala-logging-slf4j"      % "2.1.2",
     "ch.qos.logback"             %   "logback-core"             % "1.1.2",
     "ch.qos.logback"             %   "logback-classic"          % "1.1.2",
-    "com.typesafe.akka"          %%  "akka-actor"               % akkaVersion,
-    "com.typesafe.akka"          %%  "akka-slf4j"               % akkaVersion,
-    "com.typesafe.akka"          %%  "akka-testkit"             % akkaVersion % "test",
-    "org.scalatest"              %%  "scalatest"                % "2.2.0" % "test"
+    "org.scalatest"              %%  "scalatest"                % "2.2.1" % "test"
   )
 }
