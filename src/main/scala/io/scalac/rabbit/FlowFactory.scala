@@ -23,24 +23,25 @@ import io.scalac.rabbit.RabbitRegistry._
 trait FlowFactory extends LazyLogging {
   
   /** Flow responsible for mapping the incoming RabbitMQ message to our domain input. */
-  def consumerMapping: Flow[Delivery, ByteString] =
-    Flow[Delivery].map(_.message.body)
-  
+  def consumerMapping: Flow[Delivery, ByteString, Unit] = {
+    Flow[Delivery].map(d => ByteString(d.message.body.toArray))
+  }
+
   /** Flow performing our domain processing. */
-  def domainProcessing(implicit ex: ExecutionContext): Flow[ByteString, CensoredMessage] = 
+  def domainProcessing(implicit ex: ExecutionContext): Flow[ByteString, CensoredMessage, Unit] = 
     Flow[ByteString].
   
     // to string
     map { _.utf8String }.
     
     // do something time consuming
-    mapAsync { DomainService.expensiveCall }.
+    mapAsync(8) {DomainService.expensiveCall}.
 
     // classify message
     map { DomainService.classify }
     
   /** Flow responsible for mapping the domain processing result into a RabbitMQ message. */
-  def publisherMapping: Flow[CensoredMessage, Routed] = 
+  def publisherMapping: Flow[CensoredMessage, Routed, Unit] = 
     Flow[CensoredMessage] map(cMsg => cMsg match {
       case MessageSafe(msg) => Routed(routingKey = outOkQueue.name, Message(body = ByteString(cMsg.message)))
       case MessageThreat(msg) => Routed(routingKey = outNokQueue.name, Message(body = ByteString(cMsg.message)))

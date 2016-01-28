@@ -6,8 +6,8 @@ import scala.util.{Failure, Success}
 import akka.actor.ActorSystem
 import akka.util.ByteString
 
-import akka.stream.FlowMaterializer
-import akka.stream.scaladsl.{OnCompleteSink, Source, Sink}
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Source, Sink}
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -22,7 +22,7 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
   
   import actorSystem.dispatcher
   
-  implicit val materializer = FlowMaterializer()
+  implicit val materializer = ActorMaterializer()
   
   val connection = Connection()
   
@@ -30,8 +30,8 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
     case Success(_) =>
       logger.info("Exchanges, queues and bindings declared successfully.")
     
-      val rabbitConsumer = Source(connection.consume(inboundQueue.name))
-      val rabbitPublisher = Sink(connection.publish(outboundExchange.name))
+      val rabbitConsumer = Source.fromPublisher(connection.consume(inboundQueue.name))
+      val rabbitPublisher = Sink.fromSubscriber(connection.publish(outboundExchange.name))
       
       val flow = rabbitConsumer via consumerMapping via domainProcessing via publisherMapping to rabbitPublisher
     
@@ -85,13 +85,13 @@ object ConsumerApp extends App with FlowFactory with LazyLogging {
     /* publish couple of trial messages to the inbound exchange */
     Source(trialMessages).
       map(msg => Message(ByteString(msg))).
-      runWith(Sink(connection.publish(inboundExchange.name, "")))
+      runWith(Sink.fromSubscriber(connection.publish(inboundExchange.name, "")))
       
     /* log the trial messages consumed from the queue */
-    Source(connection.consume(outOkQueue.name)).
+    Source.fromPublisher(connection.consume(outOkQueue.name)).
       take(trialMessages.size).
-      map(msg => logger.info(s"'${msg.message.body.utf8String}' delivered to ${outOkQueue.name}")).
-      runWith(new OnCompleteSink({ 
+      map(msg => logger.info(s"'${ByteString(msg.message.body.toArray).utf8String}' delivered to ${outOkQueue.name}")).
+      runWith(Sink.onComplete({ 
         case Success(_) => logger.info("Trial run finished. You can now go to http://localhost:15672/ and try publishing messages manually.")
         case Failure(ex) => logger.error("Trial run finished with error.", ex)}))
   }
